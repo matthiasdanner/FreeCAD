@@ -2766,7 +2766,7 @@ bool ViewProviderSketch::selectAll()
             if (GeoId >= 0) {
                 addSelection2(fmt::format("Edge{}", GeoId + 1));
             } else {
-                addSelection2(fmt::format("ExternalEdge{}", -GeoId - 1));
+                addSelection2(fmt::format("ExternalEdge{}", GeoEnum::RefExt - GeoId + 1));
             }
         }
         else if ((*it)->isDerivedFrom<Part::GeomConic>()) {
@@ -2776,7 +2776,7 @@ bool ViewProviderSketch::selectAll()
             if (GeoId >= 0) {
                 addSelection2(fmt::format("Edge{}", GeoId + 1));
             } else {
-                addSelection2(fmt::format("ExternalEdge{}", -GeoId - 1));
+                addSelection2(fmt::format("ExternalEdge{}", GeoEnum::RefExt - GeoId + 1));
             }
         }
         else if ((*it)->isDerivedFrom<Part::GeomCurve>()) {
@@ -2798,7 +2798,7 @@ bool ViewProviderSketch::selectAll()
             if (GeoId >= 0) {
                 addSelection2(fmt::format("Edge{}", GeoId + 1));
             } else {
-                addSelection2(fmt::format("ExternalEdge{}", -GeoId - 1));
+                addSelection2(fmt::format("ExternalEdge{}", GeoEnum::RefExt - GeoId + 1));
             }
         }
     }
