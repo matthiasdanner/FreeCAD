@@ -1158,8 +1158,7 @@ int SketchObject::delConstraintOnPoint(int geoId, PointPos posId, bool onlyCoinc
 }
 // clang-format off
 
-void SketchObject::transferFilletConstraints(int geoId1, PointPos posId1, int geoId2,
-                                             PointPos posId2)
+void SketchObject::transferFilletConstraints(int geoId1, PointPos posId1, int geoId2, PointPos posId2, int cornerId, PointPos cornerPos)
 {
     // If the lines don't intersect, there's no original corner to work with so
     // don't try to transfer the constraints. But we should delete line length and equal
@@ -1188,40 +1187,28 @@ void SketchObject::transferFilletConstraints(int geoId1, PointPos posId1, int ge
         return;
     }
 
-    // If the lines aren't straight, don't try to transfer the constraints.
-    // TODO: Add support for curved lines.
-    const Part::Geometry* geo1 = getGeometry(geoId1);
-    const Part::Geometry* geo2 = getGeometry(geoId2);
-    if (!geo1->is<Part::GeomLineSegment>() || !geo2->is<Part::GeomLineSegment>()) {
-        delConstraintOnPoint(geoId1, posId1, false);
-        delConstraintOnPoint(geoId2, posId2, false);
-        return;
-    }
-
-    // Add a vertex to preserve the original intersection of the filleted lines
-    auto* originalCorner = new Part::GeomPoint(getPoint(geoId1, posId1));
-    int originalCornerId = addGeometry(originalCorner, true);
-    delete originalCorner;
-
     // Constrain the vertex to the two lines
     auto* cornerToLine1 = new Sketcher::Constraint();
     cornerToLine1->Type = Sketcher::PointOnObject;
-    cornerToLine1->First = originalCornerId;
-    cornerToLine1->FirstPos = PointPos::start;
+    cornerToLine1->First = cornerId;
+    cornerToLine1->FirstPos = cornerPos;
     cornerToLine1->Second = geoId1;
     cornerToLine1->SecondPos = PointPos::none;
     addConstraint(cornerToLine1);
     delete cornerToLine1;
     auto* cornerToLine2 = new Sketcher::Constraint();
     cornerToLine2->Type = Sketcher::PointOnObject;
-    cornerToLine2->First = originalCornerId;
-    cornerToLine2->FirstPos = PointPos::start;
+    cornerToLine2->First = cornerId;
+    cornerToLine2->FirstPos = cornerPos;
     cornerToLine2->Second = geoId2;
     cornerToLine2->SecondPos = PointPos::none;
     addConstraint(cornerToLine2);
     delete cornerToLine2;
 
     Base::StateLocker lock(managedoperation, true);
+
+    bool preserveLine1EqualConstraints = !getGeometry(geoId1)->is<Part::GeomLineSegment>();
+    bool preserveLine2EqualConstraints = !getGeometry(geoId2)->is<Part::GeomLineSegment>();
 
     // Loop through all the constraints and try to do reasonable things with the affected ones
     std::vector<Constraint*> newConstraints;
@@ -1257,22 +1244,21 @@ void SketchObject::transferFilletConstraints(int geoId1, PointPos posId1, int ge
             // of the line and the new corner
             if (line1First) {
                 c->FirstPos = (posId1 == PointPos::start) ? PointPos::end : PointPos::start;
-                c->Second = originalCornerId;
-                c->SecondPos = PointPos::start;
+                 c->Second = cornerId;
+                c->SecondPos = cornerPos;
             }
             if (line2First) {
                 c->FirstPos = (posId2 == PointPos::start) ? PointPos::end : PointPos::start;
-                c->Second = originalCornerId;
-                c->SecondPos = PointPos::start;
+                 c->Second = cornerId;
+                c->SecondPos = cornerPos;
             }
         }
         else if (c->Type == Sketcher::PointOnObject) {
             // The corner to be filleted was touching some other object.
         }
         else if (c->Type == Sketcher::Equal) {
-            // Equal length constraints are dicey because the lines are getting shorter.  Safer to
-            // delete them and let the user notice the underconstraint.
-            if (line1First || line2First || line1Second || line2Second) {
+            if ((!preserveLine1EqualConstraints && (line1First || line1Second))
+                || (!preserveLine2EqualConstraints && (line2First || line2Second))) {
                 continue;
             }
         }
@@ -1292,22 +1278,23 @@ void SketchObject::transferFilletConstraints(int geoId1, PointPos posId1, int ge
 
         // For any constraint not passing previous conditions, transfer to the new point if relevant
         if (point1First || point2First) {
-            c->First = originalCornerId;
-            c->FirstPos = PointPos::start;
+            c->First = cornerId;
+            c->FirstPos = cornerPos;
         }
         else if (point1Second || point2Second) {
-            c->Second = originalCornerId;
-            c->SecondPos = PointPos::start;
+            c->Second = cornerId;
+            c->SecondPos = cornerPos;
         }
         else if (point1Third || point2Third) {
-            c->Third = originalCornerId;
-            c->ThirdPos = PointPos::start;
+             c->Third = cornerId;
+                c->ThirdPos = cornerPos;
         }
 
         // Default: keep all other constraints
         newConstraints.push_back(c->clone());
     }
     this->Constraints.setValues(std::move(newConstraints));
+    autoRemoveRedundants(DeleteOption::NoFlag);
 }
 
 // clang-format on
